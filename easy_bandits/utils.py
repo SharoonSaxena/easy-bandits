@@ -1,6 +1,4 @@
 import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 
 def generate_arm_distributions(size, arms):
@@ -90,24 +88,3 @@ def select_non_greedy_arm(arms):
     except ValueError:
         index = np.random.choice(a=np.arange(len(arms)))
     return index
-
-
-def prepare_and_plot_data(reward_history):
-    """arranges data and plots the arm distribution
-
-    Args:
-        reward_history (np.array): _description_
-    """
-    ones = np.ones(reward_history.shape)
-    indices = np.array([j * i for i, j in enumerate(ones)], dtype="int")
-    indices = indices.flatten(order="C")
-    rewards = reward_history.flatten(order="C")
-    plt.figure(figsize=(14, 6), dpi=120)
-    sns.violinplot(x=indices, y=rewards)
-    plt.xlabel("Arm ID")
-    plt.ylabel("Reward Distribution")
-    plt.title("Reward Distribution of Arms")
-    plt.show()
-
-
-# print(prepare_and_plot_data(np.array([[2, 3], [4, 5]])))
