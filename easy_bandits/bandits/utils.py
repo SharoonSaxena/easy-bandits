@@ -1,3 +1,5 @@
+"""Contain utils for classic bandits"""
+
 import numpy as np
 
 

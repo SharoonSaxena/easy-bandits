@@ -1,5 +1,7 @@
+"""Contains Code for classic bandits test bed"""
+
 import numpy as np
-import utils as u
+from . import utils as u
 import matplotlib.pyplot as plt
 import seaborn as sns
 import dask
@@ -8,9 +10,10 @@ import dask.bag as db
 dask.config.set(scheduler="processes")
 
 
-class BanditsTestBed:
+class ClassicBanditsTestBed:
     """
-    This class is made for testing out the classical bandits test bed.\n Reward distributions have mean between (-10,+10) and variance = 1.
+    This class is made for testing out the classical bandits test bed.
+    Reward distributions have mean between (-10,+10) and variance = 1.
     """
 
     def __init__(
