@@ -1,11 +1,11 @@
-"""Contains Code for classic bandits test bed"""
+"""Contains Code for Optimistic Start Bandits test bed"""
 
+import itertools
+import dask
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import dask
 import dask.bag as db
-import itertools
 from . import utils as u
 
 
