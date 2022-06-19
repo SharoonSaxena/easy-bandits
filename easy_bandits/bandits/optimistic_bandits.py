@@ -1,12 +1,13 @@
 """Contains Code for classic bandits test bed"""
 
 import numpy as np
-from . import utils as u
 import matplotlib.pyplot as plt
 import seaborn as sns
 import dask
 import dask.bag as db
 import itertools
+from . import utils as u
+
 
 dask.config.set(scheduler="processes")
 
