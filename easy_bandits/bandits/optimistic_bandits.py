@@ -14,15 +14,15 @@ dask.config.set(scheduler="processes")
 
 class OptimisticBanditsTestBed:
     """
-    This class is made for testing out the classical bandits test bed.
+    This class is made for testing out the Optimistic bandits test bed.
+    Where each bandits starts with an optimistic reward.
     Reward distributions have mean between (-10,+10) and variance = 1.
     """
 
     def __init__(
         self,
         arms=10,
-        epsilon=0.1,
-        optimism_factor=1,
+        c_factor=0.1,
         samples=1000,
         iterations=10,
         reward_size=10,
@@ -48,9 +48,8 @@ class OptimisticBanditsTestBed:
                                         greatly reduces compute time .Defaults to 128.
         """
         self.arms = arms
-        self.epsilon = epsilon
         self.sample = samples
-        self.optimism = optimism_factor
+        self.confidence = c_factor
         self.iterations = iterations
         self.reward_size = reward_size
         self.arms_dist = u.generate_arm_distributions(self.reward_size, self.arms)
@@ -67,7 +66,9 @@ class OptimisticBanditsTestBed:
             not isinstance(self.optimism, list)
         ):
             params = (self.optimism, self.epsilon)
-            bag = db.from_sequence(params for i in self.iterations)
+            bag = db.from_sequence(
+                (params for i in self.iterations), npartitions=self.workers
+            )
             self.rewards_per_iteration = bag.map(self.run_iteration).compute()
             self.optimism_epsilon_avg_reward_histories = np.mean(
                 np.array(self.rewards_per_iteration), axis=0
@@ -92,7 +93,9 @@ class OptimisticBanditsTestBed:
             self.optimism_epsilon_avg_reward_histories = {}
             cross_product = tuple(itertools.product(tmp1, tmp2))
             for combo in cross_product:
-                bag = db.from_sequence(combo for i in range(self.iterations))
+                bag = db.from_sequence(
+                    (combo for i in range(self.iterations)), npartitions=self.workers
+                )
                 combo_iteration_history = bag.map(self.run_iteration).compute()
                 combo_history_average = np.mean(
                     np.array(combo_iteration_history), axis=0
@@ -131,12 +134,12 @@ class OptimisticBanditsTestBed:
                 reward = np.random.choice(self.arms_dist[greedy_arm])
                 reward_history[step - 1] = reward
                 average_reward = u.update_avg_reward(reward, average_reward, step + 1)
+                current_selection_per_arm[greedy_arm] += 1
                 current_reward_per_arm[greedy_arm] = u.update_avg_reward(
                     reward,
                     current_reward_per_arm[greedy_arm],
                     current_selection_per_arm[greedy_arm],
                 )
-                current_selection_per_arm[greedy_arm] += 1
 
             else:
                 arm = u.select_non_greedy_arm(current_reward_per_arm.copy())
@@ -144,12 +147,12 @@ class OptimisticBanditsTestBed:
                 reward_history[step - 1] = reward
 
                 average_reward = u.update_avg_reward(reward, average_reward, step + 1)
+                current_selection_per_arm[arm] += 1
                 current_reward_per_arm[arm] = u.update_avg_reward(
                     reward,
                     current_reward_per_arm[arm],
                     current_selection_per_arm[arm],
                 )
-                current_selection_per_arm[arm] += 1
         return reward_history
 
     def plot_arms(self):

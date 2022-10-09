@@ -10,7 +10,7 @@ import dask.bag as db
 dask.config.set(scheduler="processes")
 
 
-class ClassicBanditsTestBed:
+class UCBBanditsTestBed:
     """
     This class is made for testing out the classical bandits test bed.
     Reward distributions have mean between (-10,+10) and variance = 1.
@@ -19,7 +19,7 @@ class ClassicBanditsTestBed:
     def __init__(
         self,
         arms=10,
-        epsilon=0.1,
+        confidence_factor=0.1,
         samples=1000,
         iterations=10,
         reward_size=10,
@@ -43,7 +43,7 @@ class ClassicBanditsTestBed:
                                         greatly reduces compute time .Defaults to 128.\n
         """
         self.arms = arms
-        self.epsilon = epsilon
+        self.confidence = confidence_factor
         self.sample = samples
         self.iterations = iterations
         self.reward_size = reward_size
@@ -53,34 +53,28 @@ class ClassicBanditsTestBed:
         self.is_data_avail = False
         self.epsilon_reward_histories = None
         self.workers = partitions
+        self.rolling_sum = None
 
     def run_testbed(self):
         """Runs the test bed with initiated configuration"""
-        if isinstance(self.epsilon, list):
-            bag = db.from_sequence([i for i in self.epsilon], npartitions=self.workers)
-            self.epsilon_reward_histories = bag.map(self.run_epsilon).compute()
+        if isinstance(self.confidence, list):
+            for confidence in self.confidence:
+                bag = db.from_sequence(
+                    [confidence for _ in range(self.iterations)],
+                    npartitions=self.workers,
+                )
+                reward_histories = bag.map(self.run_iteration).compute()
+                self.rewards_per_iteration = np.mean(np.array(reward_histories), axis=0)
         else:
-            self.epsilon_reward_histories = self.run_epsilon(self.epsilon)
-        self.is_data_avail = True
+            bag = db.from_sequence(
+                [self.confidence for _ in range(self.iterations)],
+                npartitions=self.workers,
+            )
+            reward_histories = bag.map(self.run_iteration).compute()
+            self.rewards_per_iteration = np.mean(np.array(reward_histories), axis=0)
+            self.is_data_avail = True
 
-    def run_epsilon(self, epsilon):
-        """Run bandits with specific epsilon provided
-
-        Args:
-            epsilon (float): exploration factor
-
-        Returns:
-            average_reward_history: _description_
-        """
-        bag = db.from_sequence(
-            [epsilon for i in range(self.iterations)], npartitions=self.workers
-        )
-        reward_histories = bag.map(self.run_iteration).compute()
-        self.rewards_per_iteration = reward_histories
-        epsilon_avg_reward = np.mean(np.array(self.rewards_per_iteration), axis=0)
-        return epsilon_avg_reward
-
-    def run_iteration(self, epsilon):
+    def run_iteration(self, confidence):
         """Run an individual bandit with specific epsilon
 
         Args:
@@ -89,36 +83,33 @@ class ClassicBanditsTestBed:
         Returns:
             reward_history: reward history of current iteration
         """
-        average_reward = 0
         reward_history = np.zeros(self.sample)
         current_reward_per_arm = np.zeros(shape=self.arms)
         current_selection_per_arm = np.zeros(shape=self.arms)
+        current_confidence_bound = u.update_confidence_bound(
+            0, current_selection_per_arm, confidence
+        )
+
         for step in range(1, self.sample + 1):
-            if u.greedy(epsilon):
-                greedy_arm = u.select_greedy_arm(current_reward_per_arm)
-                reward = np.random.choice(self.arms_dist[greedy_arm])
-                reward_history[step - 1] = reward
-                average_reward = u.update_avg_reward(reward, average_reward, step + 1)
-                current_selection_per_arm[greedy_arm] += 1
-                current_reward_per_arm[greedy_arm] = u.update_avg_reward(
-                    reward,
-                    current_reward_per_arm[greedy_arm],
-                    current_selection_per_arm[greedy_arm],
-                )
-
-            else:
-                arm = u.select_non_greedy_arm(current_reward_per_arm.copy())
-                reward = np.random.choice(self.arms_dist[arm])
-                reward_history[step - 1] = reward
-
-                average_reward = u.update_avg_reward(reward, average_reward, step + 1)
-                current_selection_per_arm[greedy_arm] += 1
-                current_reward_per_arm[arm] = u.update_avg_reward(
-                    reward,
-                    current_reward_per_arm[arm],
-                    current_selection_per_arm[arm],
-                )
-        return reward_history
+            best_arm = u.select_highest_ucb(
+                current_reward_per_arm, current_confidence_bound
+            )
+            reward = np.random.choice(self.arms_dist[best_arm])
+            reward_history[step - 1] = reward
+            current_selection_per_arm[best_arm] += 1
+            current_reward_per_arm[best_arm] = u.update_avg_reward(
+                reward,
+                current_reward_per_arm[best_arm],
+                current_selection_per_arm[best_arm],
+            )
+            current_confidence_bound = u.update_confidence_bound(
+                step, current_selection_per_arm, confidence
+            )
+            current_confidence_bound[best_arm] = u.update_ucb_arm(
+                confidence, current_selection_per_arm[best_arm], step
+            )
+            cumulative_reward = np.cumsum(reward_history)
+        return cumulative_reward
 
     def plot_arms(self):
         """Plots the reward distribution of the arms"""
@@ -139,9 +130,14 @@ class ClassicBanditsTestBed:
             self.run_testbed()
         xlab = np.array(list(range(1, self.sample + 1)))
         plt.figure(figsize=(14, 6), dpi=120)
-        for j, i in enumerate(self.epsilon):
+        if not isinstance(self.confidence, list):
+            tmp = []
+            tmp.append(self.confidence)
+            self.confidence = tmp
+            self.rewards_per_iteration = self.rewards_per_iteration.reshape(1, -1)
+        for j, i in enumerate(self.confidence):
             plt.plot(
-                xlab, self.epsilon_reward_histories[j], label="epsilon = {}".format(i)
+                xlab, self.rewards_per_iteration[j], label="confidence_factor = {}".format(i)
             )
         plt.xlabel("Iteration")
         plt.ylabel("Average Reward")

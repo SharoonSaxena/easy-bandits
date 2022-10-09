@@ -90,3 +90,53 @@ def select_non_greedy_arm(arms):
     except ValueError:
         index = np.random.choice(a=np.arange(len(arms)))
     return index
+
+
+def update_confidence_bound(step, selection_array, confidence):
+    """updates the confidense bound after every arm iteration
+
+    Args:
+        step (current step): current step
+        selection_array (np.array): array of arms chosen
+        confidence (float): confidence factor
+
+    Returns:
+        np.array: updates UCB
+    """
+    confidence_bound = confidence * np.log(step / selection_array)
+    if step == 0:
+        confidence_bound = np.inf
+    return confidence_bound
+
+
+def update_ucb_arm(confidence, n_samples, step):
+    """updates UCB of selected arm
+
+    Args:
+        confidence (float): confidence factor
+        n_samples (int): times arm is selected
+        step (int): current step
+
+    Returns:
+        float: updated UCB
+    """
+    confidence_bound = confidence * np.log(step / n_samples)
+    return confidence_bound
+
+
+def select_highest_ucb(rewards, ucb):
+    """selects arm with highest ucb
+
+    Args:
+        rewards (_type_): _description_
+        ucb (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    tmp = rewards + ucb
+    contenders = np.where(tmp == tmp.max())
+    if contenders is int:
+        return contenders
+    index = np.random.choice(a=contenders[0])
+    return index
